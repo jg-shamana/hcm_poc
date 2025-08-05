@@ -43,10 +43,9 @@ class EcsStack(Stack):
             self,
             "ImportedVpc",
             vpc_id=cdk.Fn.import_value(f"hcm-vpc-{self.environment_name}-vpc-id"),
-            # 最小限の情報のみ指定
             availability_zones=[
-                cdk.Fn.select(0, cdk.Fn.get_azs()),  # 最初のAZ
-                cdk.Fn.select(1, cdk.Fn.get_azs())   # 2番目のAZ
+                cdk.Fn.select(0, cdk.Fn.get_azs()),
+                cdk.Fn.select(1, cdk.Fn.get_azs())
             ]
         )
 
@@ -55,7 +54,7 @@ class EcsStack(Stack):
             self,
             "EcsSecurityGroup",
             vpc=self.vpc,
-                        description=f"Security group for ECS tasks in {self.environment_name} environment",
+            description=f"Security group for ECS tasks in {self.environment_name} environment",
             allow_all_outbound=True
         )
 
@@ -68,7 +67,7 @@ class EcsStack(Stack):
 
     def _create_ecs_cluster(self) -> ecs.Cluster:
         cluster = ecs.Cluster(
-                        self,
+            self,
             "EcsCluster",
             vpc=self.vpc,
             cluster_name=f"{self.config['project_name']}-cluster-{self.environment_name}",
@@ -96,7 +95,7 @@ class EcsStack(Stack):
             self,
             "EcsExecutionRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-                        description=f"IAM execution role for ECS tasks in {self.environment_name} environment"
+            description=f"IAM execution role for ECS tasks in {self.environment_name} environment"
         )
 
         role.add_managed_policy(
@@ -135,7 +134,7 @@ class EcsStack(Stack):
             cpu=ecs_config["cpu"],
             memory_limit_mib=ecs_config["memory"],
             task_role=self.task_role,
-                        execution_role=self.execution_role
+            execution_role=self.execution_role
         )
 
         ecr_repository_arn = cdk.Fn.import_value(f"hcm-ecr-{self.environment_name}-repository-arn")
@@ -188,25 +187,22 @@ class EcsStack(Stack):
             cluster=self.cluster,
             task_definition=self.task_definition,
             service_name=f"{self.config['project_name']}-service-{self.environment_name}",
-            desired_count=ecs_config["desired_count"],  # 各AZに1つずつ（通常は2）
+            desired_count=ecs_config["desired_count"],
             max_healthy_percent=200,
             min_healthy_percent=50,
             vpc_subnets=ec2.SubnetSelection(subnets=private_subnets),
             security_groups=[self.security_group],
             assign_public_ip=False,
             platform_version=ecs.FargatePlatformVersion.LATEST,
-            # Fargateでは自動的に複数AZに分散される（desired_count=2の場合）
-            enable_execute_command=True  # ECS Execを有効化（デバッグ用）
+            enable_execute_command=True
         )
         
-        # タグを追加
         for key, value in self.config["tags"].items():
             Tags.of(service).add(key, value)
         
         return service
 
     def _create_outputs(self) -> None:
-
         CfnOutput(
             self,
             "ClusterName",
@@ -214,7 +210,7 @@ class EcsStack(Stack):
             description=f"ECS Cluster name for {self.environment_name} environment",
             export_name=f"hcm-ecs-{self.environment_name}-cluster-name"
         )
-
+        
         CfnOutput(
             self,
             "ClusterArn",
@@ -222,7 +218,7 @@ class EcsStack(Stack):
             description=f"ECS Cluster ARN for {self.environment_name} environment",
             export_name=f"hcm-ecs-{self.environment_name}-cluster-arn"
         )
-
+        
         CfnOutput(
             self,
             "ServiceName",
@@ -230,7 +226,7 @@ class EcsStack(Stack):
             description=f"ECS Service name for {self.environment_name} environment",
             export_name=f"hcm-ecs-{self.environment_name}-service-name"
         )
-
+        
         CfnOutput(
             self,
             "ServiceArn",
@@ -238,7 +234,7 @@ class EcsStack(Stack):
             description=f"ECS Service ARN for {self.environment_name} environment",
             export_name=f"hcm-ecs-{self.environment_name}-service-arn"
         )
-
+        
         CfnOutput(
             self,
             "TaskDefinitionArn",
@@ -246,7 +242,7 @@ class EcsStack(Stack):
             description=f"ECS Task Definition ARN for {self.environment_name} environment",
             export_name=f"hcm-ecs-{self.environment_name}-task-definition-arn"
         )
-
+        
         CfnOutput(
             self,
             "LogGroupName",

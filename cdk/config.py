@@ -19,7 +19,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
             "region": os.getenv("CDK_DEFAULT_REGION", "ap-northeast-1"),
             "vpc": {
                 "cidr_block": "10.0.0.0/16",
-                "private_subnet_cidr_mask": 24  # /24 サブネット (10.0.0.0/24, 10.0.1.0/24)
+                "private_subnet_cidr_mask": 24
             },
             "ecr": {
                 "repository_name": "hcm-poc-dev",
@@ -30,9 +30,9 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 }
             },
             "ecs": {
-                "cpu": 256,  # 0.25 vCPU
-                "memory": 512,  # 512 MB
-                "desired_count": 0  # デプロイ時はタスクを起動しない
+                "cpu": 256,
+                "memory": 512,
+                "desired_count": 0
             }
         },
         "prod": {
@@ -41,7 +41,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
             "region": os.getenv("CDK_DEFAULT_REGION", "ap-northeast-1"),
             "vpc": {
                 "cidr_block": "10.1.0.0/16",
-                "private_subnet_cidr_mask": 24  # /24 サブネット (10.1.0.0/24, 10.1.1.0/24)
+                "private_subnet_cidr_mask": 24
             },
             "ecr": {
                 "repository_name": "hcm-poc-prod",
@@ -52,9 +52,9 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 }
             },
             "ecs": {
-                "cpu": 512,  # 0.5 vCPU
-                "memory": 1024,  # 1 GB
-                "desired_count": 0  # デプロイ時はタスクを起動しない
+                "cpu": 512,
+                "memory": 1024,
+                "desired_count": 0
             }
         }
     }

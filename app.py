@@ -21,7 +21,6 @@ def main():
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{current_time}] Counter: {counter} - Application running normally")
             
-            # stdout をフラッシュして即座に出力する
             sys.stdout.flush()
             
             time.sleep(10)

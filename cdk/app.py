@@ -13,7 +13,6 @@ environments = ["dev", "prod"]
 for env_name in environments:
     config = get_environment_config(env_name)
 
-    # VPCスタックを作成
     VpcStack(
         app,
         f"hcm-vpc-{env_name}",
@@ -25,7 +24,6 @@ for env_name in environments:
         config=config
     )
 
-    # ECRスタックを作成
     EcrStack(
         app,
         f"hcm-ecr-{env_name}",
@@ -37,7 +35,6 @@ for env_name in environments:
         config=config
     )
 
-    # ECSスタックを作成（VPCとECRに依存）
     EcsStack(
         app,
         f"hcm-ecs-{env_name}",
