@@ -7,8 +7,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY get_commit_id.py .
+COPY app.py .
 
-RUN chmod +x get_commit_id.py
+RUN chmod +x app.py
 
-CMD ["python3.12", "get_commit_id.py"] 
+CMD ["python3.12", "app.py"] 
