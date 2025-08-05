@@ -2,6 +2,9 @@ FROM python:3.12.11-slim
 
 WORKDIR /app
 
+# Python出力をバッファリングしない
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && \
     apt-get install -y git && \
     apt-get clean && \

@@ -159,7 +159,8 @@ class EcsStack(Stack):
             ),
             environment={
                 "ENVIRONMENT": self.environment_name,
-                "PROJECT_NAME": self.config["project_name"]
+                "PROJECT_NAME": self.config["project_name"],
+                "PYTHONUNBUFFERED": "1"
             }
         )
         
