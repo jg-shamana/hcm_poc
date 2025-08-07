@@ -126,7 +126,7 @@ class VpcStack(Stack):
             "VpcId",
             value=self.vpc.vpc_id,
             description=f"VPC ID for {self.environment_name} environment",
-            export_name=f"hcm-vpc-{self.environment_name}-vpc-id"
+            export_name=f"cdk-hcm-vpc-{self.environment_name}-vpc-id"
         )
         
         CfnOutput(
@@ -134,7 +134,7 @@ class VpcStack(Stack):
             "VpcCidr",
             value=self.vpc.vpc_cidr_block,
             description=f"VPC CIDR for {self.environment_name} environment",
-            export_name=f"hcm-vpc-{self.environment_name}-vpc-cidr"
+            export_name=f"cdk-hcm-vpc-{self.environment_name}-vpc-cidr"
         )
         
         isolated_subnets = self.vpc.isolated_subnets
@@ -147,7 +147,7 @@ class VpcStack(Stack):
                 f"PrivateSubnet{subnet_number}Id",
                 value=subnet.subnet_id,
                 description=f"Private Subnet {subnet_number} ID for {self.environment_name} environment",
-                export_name=f"hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-id"
+                export_name=f"cdk-hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-id"
             )
             
             CfnOutput(
@@ -155,7 +155,7 @@ class VpcStack(Stack):
                 f"PrivateSubnet{subnet_number}Cidr",
                 value=subnet.ipv4_cidr_block,
                 description=f"Private Subnet {subnet_number} CIDR for {self.environment_name} environment",
-                export_name=f"hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-cidr"
+                export_name=f"cdk-hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-cidr"
             )
             
             CfnOutput(
@@ -163,8 +163,8 @@ class VpcStack(Stack):
                 f"PrivateSubnet{subnet_number}Az",
                 value=subnet.availability_zone,
                 description=f"Private Subnet {subnet_number} AZ for {self.environment_name} environment",
-                export_name=f"hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-az"
+                export_name=f"cdk-hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-az"
             )
 
     def get_vpc(self) -> ec2.Vpc:
-        return self.vpc 
+        return self.vpc

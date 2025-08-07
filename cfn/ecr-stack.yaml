@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECR repository stack for HCM POC - CFN version"
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+    Default: dev
+    Description: Environment name
+
+  ProjectName:
+    Type: String
+    Default: cfn-hcm-poc
+    Description: Project name
+
+Mappings:
+  EnvironmentMap:
+    dev:
+      RepositoryName: "cfn-hcm-poc-dev"
+      ImageTagMutability: "MUTABLE"
+      MaxImageCount: 10
+    prod:
+      RepositoryName: "cfn-hcm-poc-prod"
+      ImageTagMutability: "IMMUTABLE"
+      MaxImageCount: 50
+
+Resources:
+  # ECR Repository
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName:
+        !FindInMap [EnvironmentMap, !Ref Environment, RepositoryName]
+      ImageTagMutability:
+        !FindInMap [EnvironmentMap, !Ref Environment, ImageTagMutability]
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub
+          - |
+            {
+              "rules": [
+                {
+                  "rulePriority": 1,
+                  "description": "Keep only ${MaxImageCount} images",
+                  "selection": {
+                    "tagStatus": "any",
+                    "countType": "imageCountMoreThan",
+                    "countNumber": ${MaxImageCount}
+                  },
+                  "action": {
+                    "type": "expire"
+                  }
+                }
+              ]
+            }
+          - MaxImageCount:
+              !FindInMap [EnvironmentMap, !Ref Environment, MaxImageCount]
+        RegistryId: !Ref AWS::AccountId
+      Tags:
+        - Key: Name
+          Value: !FindInMap [EnvironmentMap, !Ref Environment, RepositoryName]
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+    DeletionPolicy: !If [IsDevEnvironment, Delete, Retain]
+
+Conditions:
+  IsDevEnvironment: !Equals [!Ref Environment, dev]
+
+Outputs:
+  RepositoryUri:
+    Description: "ECR Repository URI for environment"
+    Value: !GetAtt EcrRepository.RepositoryUri
+    Export:
+      Name: !Sub "cfn-hcm-ecr-${Environment}-repository-uri"
+
+  RepositoryName:
+    Description: "ECR Repository Name for environment"
+    Value: !Ref EcrRepository
+    Export:
+      Name: !Sub "cfn-hcm-ecr-${Environment}-repository-name"
+
+  RepositoryArn:
+    Description: "ECR Repository ARN for environment"
+    Value: !GetAtt EcrRepository.Arn
+    Export:
+      Name: !Sub "cfn-hcm-ecr-${Environment}-repository-arn"

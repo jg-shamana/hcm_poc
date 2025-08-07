@@ -29,20 +29,27 @@ class EcsStack(Stack):
         self.config = config
         
         self.vpc = self._import_vpc()
+        
         self.security_group = self._create_security_group()
+        
         self.cluster = self._create_ecs_cluster()
+        
         self.task_role = self._create_task_role()
         self.execution_role = self._create_execution_role()
+        
         self.log_group = self._create_log_group()
+        
         self.task_definition = self._create_task_definition()
+        
         self.service = self._create_ecs_service()
+        
         self._create_outputs()
 
     def _import_vpc(self) -> ec2.IVpc:
         return ec2.Vpc.from_vpc_attributes(
             self,
             "ImportedVpc",
-            vpc_id=cdk.Fn.import_value(f"hcm-vpc-{self.environment_name}-vpc-id"),
+            vpc_id=cdk.Fn.import_value(f"cdk-hcm-vpc-{self.environment_name}-vpc-id"),
             availability_zones=[
                 cdk.Fn.select(0, cdk.Fn.get_azs()),
                 cdk.Fn.select(1, cdk.Fn.get_azs())
@@ -137,8 +144,8 @@ class EcsStack(Stack):
             execution_role=self.execution_role
         )
 
-        ecr_repository_arn = cdk.Fn.import_value(f"hcm-ecr-{self.environment_name}-repository-arn")
-        ecr_repository_name = cdk.Fn.import_value(f"hcm-ecr-{self.environment_name}-repository-name")
+        ecr_repository_arn = cdk.Fn.import_value(f"cdk-hcm-ecr-{self.environment_name}-repository-arn")
+        ecr_repository_name = cdk.Fn.import_value(f"cdk-hcm-ecr-{self.environment_name}-repository-name")
         
         ecr_repository = ecr.Repository.from_repository_attributes(
             self,
@@ -173,7 +180,7 @@ class EcsStack(Stack):
         
         private_subnets = []
         for i in range(2):
-            subnet_id = cdk.Fn.import_value(f"hcm-vpc-{self.environment_name}-private-subnet-{i+1}-id")
+            subnet_id = cdk.Fn.import_value(f"cdk-hcm-vpc-{self.environment_name}-private-subnet-{i+1}-id")
             subnet = ec2.Subnet.from_subnet_id(
                 self,
                 f"PrivateSubnet{i+1}",
@@ -208,45 +215,45 @@ class EcsStack(Stack):
             "ClusterName",
             value=self.cluster.cluster_name,
             description=f"ECS Cluster name for {self.environment_name} environment",
-            export_name=f"hcm-ecs-{self.environment_name}-cluster-name"
+            export_name=f"cdk-hcm-ecs-{self.environment_name}-cluster-name"
         )
-        
+
         CfnOutput(
             self,
             "ClusterArn",
             value=self.cluster.cluster_arn,
             description=f"ECS Cluster ARN for {self.environment_name} environment",
-            export_name=f"hcm-ecs-{self.environment_name}-cluster-arn"
+            export_name=f"cdk-hcm-ecs-{self.environment_name}-cluster-arn"
         )
-        
+
         CfnOutput(
             self,
             "ServiceName",
             value=self.service.service_name,
             description=f"ECS Service name for {self.environment_name} environment",
-            export_name=f"hcm-ecs-{self.environment_name}-service-name"
+            export_name=f"cdk-hcm-ecs-{self.environment_name}-service-name"
         )
-        
+
         CfnOutput(
             self,
             "ServiceArn",
             value=self.service.service_arn,
             description=f"ECS Service ARN for {self.environment_name} environment",
-            export_name=f"hcm-ecs-{self.environment_name}-service-arn"
+            export_name=f"cdk-hcm-ecs-{self.environment_name}-service-arn"
         )
-        
+
         CfnOutput(
             self,
             "TaskDefinitionArn",
             value=self.task_definition.task_definition_arn,
             description=f"ECS Task Definition ARN for {self.environment_name} environment",
-            export_name=f"hcm-ecs-{self.environment_name}-task-definition-arn"
+            export_name=f"cdk-hcm-ecs-{self.environment_name}-task-definition-arn"
         )
-        
+
         CfnOutput(
             self,
             "LogGroupName",
             value=self.log_group.log_group_name,
             description=f"CloudWatch Log Group name for {self.environment_name} environment",
-            export_name=f"hcm-ecs-{self.environment_name}-log-group-name"
+            export_name=f"cdk-hcm-ecs-{self.environment_name}-log-group-name"
         ) 

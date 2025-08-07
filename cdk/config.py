@@ -4,7 +4,7 @@ from typing import Dict, Any
 def get_environment_config(environment: str) -> Dict[str, Any]:
 
     base_config = {
-        "project_name": "hcm-poc",
+        "project_name": "cdk-hcm-poc",
         "tags": {
             "Project": "HCM-POC",
             "Environment": environment,
@@ -22,7 +22,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 "private_subnet_cidr_mask": 24
             },
             "ecr": {
-                "repository_name": "hcm-poc-dev",
+                "repository_name": "cdk-hcm-poc-dev",
                 "image_tag_mutability": "MUTABLE",
                 "scan_on_push": True,
                 "lifecycle_policy": {
@@ -44,7 +44,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 "private_subnet_cidr_mask": 24
             },
             "ecr": {
-                "repository_name": "hcm-poc-prod",
+                "repository_name": "cdk-hcm-poc-prod",
                 "image_tag_mutability": "IMMUTABLE",
                 "scan_on_push": True,
                 "lifecycle_policy": {

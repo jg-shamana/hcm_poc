@@ -59,7 +59,7 @@ class EcrStack(Stack):
             "RepositoryUri",
             value=self.ecr_repository.repository_uri,
             description=f"ECR Repository URI for {self.environment_name} environment",
-            export_name=f"hcm-ecr-{self.environment_name}-repository-uri"
+            export_name=f"cdk-hcm-ecr-{self.environment_name}-repository-uri"
         )
 
         CfnOutput(
@@ -67,7 +67,7 @@ class EcrStack(Stack):
             "RepositoryName",
             value=self.ecr_repository.repository_name,
             description=f"ECR Repository Name for {self.environment_name} environment",
-            export_name=f"hcm-ecr-{self.environment_name}-repository-name"
+            export_name=f"cdk-hcm-ecr-{self.environment_name}-repository-name"
         )
 
         CfnOutput(
@@ -75,5 +75,5 @@ class EcrStack(Stack):
             "RepositoryArn",
             value=self.ecr_repository.repository_arn,
             description=f"ECR Repository ARN for {self.environment_name} environment",
-            export_name=f"hcm-ecr-{self.environment_name}-repository-arn"
+            export_name=f"cdk-hcm-ecr-{self.environment_name}-repository-arn"
         )

@@ -15,7 +15,7 @@ for env_name in environments:
 
     VpcStack(
         app,
-        f"hcm-vpc-{env_name}",
+        f"cdk-hcm-vpc-{env_name}",
         env=cdk.Environment(
             account=config["account"],
             region=config["region"]
@@ -26,7 +26,7 @@ for env_name in environments:
 
     EcrStack(
         app,
-        f"hcm-ecr-{env_name}",
+        f"cdk-hcm-ecr-{env_name}",
         env=cdk.Environment(
             account=config["account"],
             region=config["region"]
@@ -37,7 +37,7 @@ for env_name in environments:
 
     EcsStack(
         app,
-        f"hcm-ecs-{env_name}",
+        f"cdk-hcm-ecs-{env_name}",
         env=cdk.Environment(
             account=config["account"],
             region=config["region"]

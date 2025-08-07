@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "VPC stack with private subnets and VPC endpoints for HCM POC - CFN version"
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+    Default: dev
+    Description: Environment name
+
+  ProjectName:
+    Type: String
+    Default: cfn-hcm-poc
+    Description: Project name
+
+Mappings:
+  EnvironmentMap:
+    dev:
+      VpcCidr: "10.0.0.0/16"
+      PrivateSubnet1Cidr: "10.0.0.0/24"
+      PrivateSubnet2Cidr: "10.0.1.0/24"
+    prod:
+      VpcCidr: "10.1.0.0/16"
+      PrivateSubnet1Cidr: "10.1.0.0/24"
+      PrivateSubnet2Cidr: "10.1.1.0/24"
+
+Resources:
+  # VPC
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Private Subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock:
+        !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet1Cidr]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-subnet-${Environment}-1"
+        - Key: Type
+          Value: Private
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Private Subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock:
+        !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet2Cidr]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-subnet-${Environment}-2"
+        - Key: Type
+          Value: Private
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Security Group for VPC Endpoints
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Security group for VPC endpoints in ${Environment} environment"
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
+          Description: "Allow HTTPS from VPC"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc-endpoint-sg-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # S3 Gateway Endpoint
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds: []
+
+  # ECR Docker Interface Endpoint
+  EcrDkrEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECR API Interface Endpoint
+  EcrApiEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # CloudWatch Logs Interface Endpoint
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+Outputs:
+  VpcId:
+    Description: "VPC ID for environment"
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-vpc-id"
+
+  VpcCidr:
+    Description: "VPC CIDR for environment"
+    Value: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-vpc-cidr"
+
+  PrivateSubnet1Id:
+    Description: "Private Subnet 1 ID for environment"
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-1-id"
+
+  PrivateSubnet1Cidr:
+    Description: "Private Subnet 1 CIDR for environment"
+    Value: !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet1Cidr]
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-1-cidr"
+
+  PrivateSubnet1Az:
+    Description: "Private Subnet 1 AZ for environment"
+    Value: !GetAtt PrivateSubnet1.AvailabilityZone
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-1-az"
+
+  PrivateSubnet2Id:
+    Description: "Private Subnet 2 ID for environment"
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-2-id"
+
+  PrivateSubnet2Cidr:
+    Description: "Private Subnet 2 CIDR for environment"
+    Value: !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet2Cidr]
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-2-cidr"
+
+  PrivateSubnet2Az:
+    Description: "Private Subnet 2 AZ for environment"
+    Value: !GetAtt PrivateSubnet2.AvailabilityZone
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-2-az"

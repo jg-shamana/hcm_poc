@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECS Fargate stack for HCM POC - CFN version"
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+    Default: dev
+    Description: Environment name
+
+  ProjectName:
+    Type: String
+    Default: cfn-hcm-poc
+    Description: Project name
+
+Mappings:
+  EnvironmentMap:
+    dev:
+      Cpu: 256
+      Memory: 512
+      DesiredCount: 0
+      LogRetentionDays: 7
+    prod:
+      Cpu: 512
+      Memory: 1024
+      DesiredCount: 0
+      LogRetentionDays: 30
+
+Resources:
+  # ECS Cluster
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-cluster-${Environment}"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-cluster-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Security Group for ECS Tasks
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for ECS tasks"
+      VpcId: !ImportValue
+        Fn::Sub: "cfn-hcm-vpc-${Environment}-vpc-id"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-ecs-sg-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # IAM Role for Task Execution
+  EcsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-ecs-execution-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: LogsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/*"
+
+  # IAM Role for Task
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-ecs-task-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # CloudWatch Log Group
+  EcsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}-${Environment}"
+      RetentionInDays:
+        !FindInMap [EnvironmentMap, !Ref Environment, LogRetentionDays]
+    DeletionPolicy: !If [IsDevEnvironment, Delete, Retain]
+
+  # ECS Task Definition
+  EcsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-task-${Environment}"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !FindInMap [EnvironmentMap, !Ref Environment, Cpu]
+      Memory: !FindInMap [EnvironmentMap, !Ref Environment, Memory]
+      ExecutionRoleArn: !GetAtt EcsExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: AppContainer
+          Image: !Sub
+            - "${RepositoryUri}:latest"
+            - RepositoryUri: !ImportValue
+                Fn::Sub: "cfn-hcm-ecr-${Environment}-repository-uri"
+          Cpu: !FindInMap [EnvironmentMap, !Ref Environment, Cpu]
+          Memory: !FindInMap [EnvironmentMap, !Ref Environment, Memory]
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref EcsLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
+            - Name: PROJECT_NAME
+              Value: !Ref ProjectName
+            - Name: PYTHONUNBUFFERED
+              Value: "1"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-task-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ECS Service
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub "${ProjectName}-service-${Environment}"
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref EcsTaskDefinition
+      DesiredCount: !FindInMap [EnvironmentMap, !Ref Environment, DesiredCount]
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+          Subnets:
+            - !ImportValue
+              Fn::Sub: "cfn-hcm-vpc-${Environment}-private-subnet-1-id"
+            - !ImportValue
+              Fn::Sub: "cfn-hcm-vpc-${Environment}-private-subnet-2-id"
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      EnableExecuteCommand: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-service-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Conditions:
+  IsDevEnvironment: !Equals [!Ref Environment, dev]
+
+Outputs:
+  ClusterName:
+    Description: "ECS Cluster name for environment"
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-cluster-name"
+
+  ClusterArn:
+    Description: "ECS Cluster ARN for environment"
+    Value: !GetAtt EcsCluster.Arn
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-cluster-arn"
+
+  ServiceName:
+    Description: "ECS Service name for environment"
+    Value: !Ref EcsService
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-service-name"
+
+  ServiceArn:
+    Description: "ECS Service ARN for environment"
+    Value: !Ref EcsService
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-service-arn"
+
+  TaskDefinitionArn:
+    Description: "ECS Task Definition ARN for environment"
+    Value: !Ref EcsTaskDefinition
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-task-definition-arn"
+
+  LogGroupName:
+    Description: "CloudWatch Log Group name for environment"
+    Value: !Ref EcsLogGroup
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-log-group-name"
