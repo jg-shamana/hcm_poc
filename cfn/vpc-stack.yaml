@@ -42,6 +42,21 @@ Resources:
         - Key: ManagedBy
           Value: CloudFormation
 
+  # Route Table for Private Subnets
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-rt-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
   # Private Subnet 1
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -62,6 +77,13 @@ Resources:
           Value: !Ref Environment
         - Key: ManagedBy
           Value: CloudFormation
+
+  # Associate Private Subnet 1 with Route Table
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
 
   # Private Subnet 2
   PrivateSubnet2:
@@ -84,11 +106,18 @@ Resources:
         - Key: ManagedBy
           Value: CloudFormation
 
+  # Associate Private Subnet 2 with Route Table
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
   # Security Group for VPC Endpoints
   VpcEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Sub "Security group for VPC endpoints in ${Environment} environment"
+      GroupDescription: "Security group for VPC endpoints"
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -113,7 +142,8 @@ Resources:
       VpcId: !Ref Vpc
       ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
       VpcEndpointType: Gateway
-      RouteTableIds: []
+      RouteTableIds:
+        - !Ref PrivateRouteTable
 
   # ECR Docker Interface Endpoint
   EcrDkrEndpoint:
@@ -169,6 +199,12 @@ Outputs:
     Value: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
     Export:
       Name: !Sub "cfn-hcm-vpc-${Environment}-vpc-cidr"
+
+  PrivateRouteTableId:
+    Description: "Private Route Table ID for environment"
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-route-table-id"
 
   PrivateSubnet1Id:
     Description: "Private Subnet 1 ID for environment"
