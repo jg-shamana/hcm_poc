@@ -8,12 +8,13 @@ from config import get_environment_config
 
 app = cdk.App()
 
-environments = ["dev", "prod"]
+# environments = ["dev", "prod"]
+environments = ["dev"]
 
 for env_name in environments:
     config = get_environment_config(env_name)
 
-    VpcStack(
+    vpc_stack = VpcStack(
         app,
         f"cdk-hcm-vpc-{env_name}",
         env=cdk.Environment(
@@ -24,7 +25,7 @@ for env_name in environments:
         config=config
     )
 
-    EcrStack(
+    ecr_stack = EcrStack(
         app,
         f"cdk-hcm-ecr-{env_name}",
         env=cdk.Environment(
@@ -35,7 +36,7 @@ for env_name in environments:
         config=config
     )
 
-    EcsStack(
+    ecs_stack = EcsStack(
         app,
         f"cdk-hcm-ecs-{env_name}",
         env=cdk.Environment(
@@ -45,5 +46,9 @@ for env_name in environments:
         environment_name=env_name,
         config=config
     )
+
+    # 依存関係の明示的な設定
+    ecs_stack.add_dependency(vpc_stack)
+    ecs_stack.add_dependency(ecr_stack)
 
 app.synth()
