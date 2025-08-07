@@ -29,12 +29,36 @@ name: Deploy to Amazon ECS
 on:
   push:
     branches: ["develop"]
+  workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: "Deployment target (resource prefix)"
+        required: true
+        default: "cdk"
+        type: choice
+        options:
+          - cdk
+          - cfn
+      environment:
+        description: "Environment to deploy"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - prod
+      aws_region:
+        description: "AWS Region"
+        required: true
+        default: "ap-south-1"
+        type: string
 
 env:
-  AWS_REGION: ap-south-1
-  ECR_REPOSITORY: hcm-poc-dev
-  ECS_SERVICE: hcm-poc-service-dev
-  ECS_CLUSTER: hcm-poc-cluster-dev
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'ap-south-1' }}
+  # Default values for automatic push deployment (existing CDK-less resources)
+  ECR_REPOSITORY: ${{ github.event.inputs.deployment_target && format('{0}-hcm-poc-{1}', github.event.inputs.deployment_target, github.event.inputs.environment || 'dev') || 'hcm-poc-dev' }}
+  ECS_SERVICE: ${{ github.event.inputs.deployment_target && format('{0}-hcm-poc-service-{1}', github.event.inputs.deployment_target, github.event.inputs.environment || 'dev') || 'hcm-poc-service-dev' }}
+  ECS_CLUSTER: ${{ github.event.inputs.deployment_target && format('{0}-hcm-poc-cluster-{1}', github.event.inputs.deployment_target, github.event.inputs.environment || 'dev') || 'hcm-poc-cluster-dev' }}
   ECS_TASK_DEFINITION: .aws/task-definition.json
   CONTAINER_NAME: AppContainer
 
@@ -42,8 +66,40 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy
+  # Manual approval job for manual workflow dispatch
+  approval:
+    if: github.event_name == 'workflow_dispatch'
+    name: 🔍 Deployment Approval
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment == 'prod' && 'production' || 'develop' }}
+
+    steps:
+      - name: Display deployment plan
+        run: |
+          echo "📋 Deployment Plan Review"
+          echo "========================="
+          echo "🎯 Target: ${{ github.event.inputs.deployment_target || 'cdk' }} prefixed resources"
+          echo "🌍 Environment: ${{ github.event.inputs.environment || 'dev' }}"
+          echo "🗺️  Region: ${{ github.event.inputs.aws_region || 'ap-south-1' }}"
+          echo ""
+          echo "📦 Resources to be used:"
+          echo "  ECR Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "  ECS Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "  ECS Service: ${{ env.ECS_SERVICE }}"
+          echo ""
+          echo "⚠️  This deployment will update the existing ECS service"
+          echo "    with a new container image version."
+          echo ""
+          echo "✅ Deployment approved by environment protection rules"
+
+    outputs:
+      deployment_target: ${{ github.event.inputs.deployment_target }}
+      environment: ${{ github.event.inputs.environment }}
+
+  # Deploy job for automatic push
+  deploy-auto:
+    if: github.event_name == 'push'
+    name: Deploy (Auto)
     runs-on: ubuntu-latest
     environment: develop
 
@@ -75,11 +131,23 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      - name: Get current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_SERVICE }} \
+            --query 'taskDefinition' \
+            --output json > current-task-definition.json
+
+          # Remove fields that cannot be used in register-task-definition
+          cat current-task-definition.json | \
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' \
+          > task-definition.json
+
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          task-definition: task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
@@ -90,3 +158,89 @@ jobs:
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Deployment summary
+        run: |
+          echo "🚀 Automatic deployment completed successfully!"
+          echo "Target: default (no prefix)"
+          echo "Environment: dev"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "ECS Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "ECS Service: ${{ env.ECS_SERVICE }}"
+          echo "Container Image: ${{ steps.build-image.outputs.image }}"
+
+  # Deploy job for manual workflow dispatch (after approval)
+  deploy-manual:
+    if: github.event_name == 'workflow_dispatch'
+    name: Deploy (Manual)
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment == 'prod' && 'production' || 'develop' }}
+    needs: approval
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build a docker container and
+          # push it to ECR so that it can
+          # be deployed to ECS.
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Get current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_SERVICE }} \
+            --query 'taskDefinition' \
+            --output json > current-task-definition.json
+
+          # Remove fields that cannot be used in register-task-definition
+          cat current-task-definition.json | \
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' \
+          > task-definition.json
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Deployment summary
+        run: |
+          echo "🚀 Manual deployment completed successfully!"
+          echo "Target: ${{ github.event.inputs.deployment_target }}"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "ECS Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "ECS Service: ${{ env.ECS_SERVICE }}"
+          echo "Container Image: ${{ steps.build-image.outputs.image }}"
