@@ -179,29 +179,21 @@ class EcsStack(Stack):
             repository_name=ecr_repository_name
         )
 
-        firelens_container = task_definition.add_container(
+        firelens_container = task_definition.add_firelens_log_router(
             "log_router",
             image=ecs.ContainerImage.from_registry("newrelic/logging-firelens-fluentbit:2.4.0"),
-            cpu=50,
-            memory_reservation_mib=50,
-            essential=False,
+            firelens_config=ecs.FirelensConfig(
+                type=ecs.FirelensLogRouterType.FLUENTBIT,
+                options=ecs.FirelensOptions(enable_ecs_log_metadata=True)
+            ),
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="firelens",
                 log_group=self.firelens_log_group
             ),
+            cpu=50,
+            memory_reservation_mib=50,
             environment={
                 "AWS_REGION": self.region
-            }
-        )
-
-        cfn_task_definition = task_definition.node.default_child
-        cfn_task_definition.add_override(
-            "Properties.ContainerDefinitions.0.FirelensConfiguration",
-            {
-                "Type": "fluentbit",
-                "Options": {
-                    "enable-ecs-log-metadata": "true"
-                }
             }
         )
 

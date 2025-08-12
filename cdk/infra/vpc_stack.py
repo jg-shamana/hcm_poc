@@ -37,6 +37,11 @@ class VpcStack(Stack):
             max_azs=2,
             subnet_configuration=[
                 ec2.SubnetConfiguration(
+                    name="Public",
+                    subnet_type=ec2.SubnetType.PUBLIC,
+                    cidr_mask=vpc_config["public_subnet_cidr_mask"]
+                ),
+                ec2.SubnetConfiguration(
                     name="Private",
                     subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
                     cidr_mask=vpc_config["private_subnet_cidr_mask"]
@@ -55,6 +60,10 @@ class VpcStack(Stack):
         for i, subnet in enumerate(vpc.private_subnets):
             Tags.of(subnet).add("Name", f"{self.config['project_name']}-private-subnet-{self.environment_name}-{i+1}")
             Tags.of(subnet).add("Type", "Private")
+        
+        for i, subnet in enumerate(vpc.public_subnets):
+            Tags.of(subnet).add("Name", f"{self.config['project_name']}-public-subnet-{self.environment_name}-{i+1}")
+            Tags.of(subnet).add("Type", "Public")
         
         return vpc
 

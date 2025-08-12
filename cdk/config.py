@@ -19,6 +19,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
             "region": os.getenv("CDK_DEFAULT_REGION", "ap-northeast-1"),
             "vpc": {
                 "cidr_block": "10.0.0.0/16",
+                "public_subnet_cidr_mask": 24,
                 "private_subnet_cidr_mask": 24
             },
             "ecr": {
@@ -41,6 +42,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
             "region": os.getenv("CDK_DEFAULT_REGION", "ap-northeast-1"),
             "vpc": {
                 "cidr_block": "10.1.0.0/16",
+                "public_subnet_cidr_mask": 24,
                 "private_subnet_cidr_mask": 24
             },
             "ecr": {

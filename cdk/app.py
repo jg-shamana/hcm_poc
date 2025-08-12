@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import aws_cdk as cdk
 from infra.ecr_stack import EcrStack
 from infra.vpc_stack import VpcStack
@@ -8,7 +6,6 @@ from config import get_environment_config
 
 app = cdk.App()
 
-# environments = ["dev", "prod"]
 environments = ["dev"]
 
 for env_name in environments:
@@ -47,7 +44,6 @@ for env_name in environments:
         config=config
     )
 
-    # 依存関係の明示的な設定
     ecs_stack.add_dependency(vpc_stack)
     ecs_stack.add_dependency(ecr_stack)
 
