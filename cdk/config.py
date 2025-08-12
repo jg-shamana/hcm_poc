@@ -32,7 +32,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
             "ecs": {
                 "cpu": 256,
                 "memory": 512,
-                "desired_count": 0
+                "desired_count": 1
             }
         },
         "prod": {

@@ -38,11 +38,11 @@ class VpcStack(Stack):
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name="Private",
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
                     cidr_mask=vpc_config["private_subnet_cidr_mask"]
                 )
             ],
-            nat_gateways=0,
+            nat_gateways=1,
             enable_dns_hostnames=True,
             enable_dns_support=True
         )
@@ -83,7 +83,7 @@ class VpcStack(Stack):
             "S3Endpoint",
             vpc=self.vpc,
             service=ec2.GatewayVpcEndpointAwsService.S3,
-            subnets=[ec2.SubnetSelection(subnets=self.vpc.isolated_subnets)]
+            subnets=[ec2.SubnetSelection(subnets=self.vpc.private_subnets)]
         )
         
         ecr_dkr_endpoint = ec2.InterfaceVpcEndpoint(
@@ -91,7 +91,7 @@ class VpcStack(Stack):
             "EcrDkrEndpoint",
             vpc=self.vpc,
             service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
-            subnets=ec2.SubnetSelection(subnets=self.vpc.isolated_subnets),
+            subnets=ec2.SubnetSelection(subnets=self.vpc.private_subnets),
             security_groups=[vpc_endpoint_sg],
             private_dns_enabled=True
         )
@@ -101,7 +101,7 @@ class VpcStack(Stack):
             "EcrApiEndpoint",
             vpc=self.vpc,
             service=ec2.InterfaceVpcEndpointAwsService.ECR,
-            subnets=ec2.SubnetSelection(subnets=self.vpc.isolated_subnets),
+            subnets=ec2.SubnetSelection(subnets=self.vpc.private_subnets),
             security_groups=[vpc_endpoint_sg],
             private_dns_enabled=True
         )
@@ -111,7 +111,7 @@ class VpcStack(Stack):
             "LogsEndpoint",
             vpc=self.vpc,
             service=ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-            subnets=ec2.SubnetSelection(subnets=self.vpc.isolated_subnets),
+            subnets=ec2.SubnetSelection(subnets=self.vpc.private_subnets),
             security_groups=[vpc_endpoint_sg],
             private_dns_enabled=True
         )
@@ -137,9 +137,9 @@ class VpcStack(Stack):
             export_name=f"cdk-hcm-vpc-{self.environment_name}-vpc-cidr"
         )
         
-        isolated_subnets = self.vpc.isolated_subnets
+        private_subnets = self.vpc.private_subnets
         
-        for i, subnet in enumerate(isolated_subnets):
+        for i, subnet in enumerate(private_subnets):
             subnet_number = i + 1
             
             CfnOutput(

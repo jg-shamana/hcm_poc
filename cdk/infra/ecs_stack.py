@@ -8,6 +8,7 @@ from aws_cdk import (
     aws_ecr as ecr,
     aws_iam as iam,
     aws_logs as logs,
+    aws_secretsmanager as secretsmanager,
     CfnOutput,
     Tags,
     RemovalPolicy
@@ -34,10 +35,25 @@ class EcsStack(Stack):
         
         self.cluster = self._create_ecs_cluster()
         
+        self.newrelic_secret = secretsmanager.Secret.from_secret_name_v2(
+            self,
+            "NewRelicSecret",
+            secret_name="hcm_poc"
+        )
+        
         self.task_role = self._create_task_role()
         self.execution_role = self._create_execution_role()
         
+        self.execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+                resources=[self.newrelic_secret.secret_arn]
+            )
+        )
+        
         self.log_group = self._create_log_group()
+        self.firelens_log_group = self._create_firelens_log_group()
         
         self.task_definition = self._create_task_definition()
         
@@ -131,6 +147,15 @@ class EcsStack(Stack):
             removal_policy=RemovalPolicy.DESTROY if self.environment_name == "dev" else RemovalPolicy.RETAIN
         )
 
+    def _create_firelens_log_group(self) -> logs.LogGroup:
+        return logs.LogGroup(
+            self,
+            "FirelensLogGroup",
+            log_group_name=f"/ecs/{self.config['project_name']}-firelens-{self.environment_name}",
+            retention=logs.RetentionDays.ONE_WEEK if self.environment_name == "dev" else logs.RetentionDays.ONE_MONTH,
+            removal_policy=RemovalPolicy.DESTROY if self.environment_name == "dev" else RemovalPolicy.RETAIN
+        )
+
     def _create_task_definition(self) -> ecs.FargateTaskDefinition:
         ecs_config = self.config["ecs"]
         
@@ -154,14 +179,48 @@ class EcsStack(Stack):
             repository_name=ecr_repository_name
         )
 
-        container = task_definition.add_container(
+        firelens_container = task_definition.add_container(
+            "log_router",
+            image=ecs.ContainerImage.from_registry("newrelic/logging-firelens-fluentbit:2.4.0"),
+            cpu=50,
+            memory_reservation_mib=50,
+            essential=False,
+            logging=ecs.LogDrivers.aws_logs(
+                stream_prefix="firelens",
+                log_group=self.firelens_log_group
+            ),
+            environment={
+                "AWS_REGION": self.region
+            }
+        )
+
+        cfn_task_definition = task_definition.node.default_child
+        cfn_task_definition.add_override(
+            "Properties.ContainerDefinitions.0.FirelensConfiguration",
+            {
+                "Type": "fluentbit",
+                "Options": {
+                    "enable-ecs-log-metadata": "true"
+                }
+            }
+        )
+
+        json_key = f"hcm-poc-{self.environment_name}-newrelic-api-key"
+
+        app_container = task_definition.add_container(
             "AppContainer",
             image=ecs.ContainerImage.from_ecr_repository(repository=ecr_repository, tag="latest"),
-            cpu=ecs_config["cpu"],
-            memory_limit_mib=ecs_config["memory"],
-            logging=ecs.LogDrivers.aws_logs(
-                stream_prefix="ecs",
-                log_group=self.log_group
+            cpu=ecs_config["cpu"] - 50,
+            memory_limit_mib=ecs_config["memory"] - 50,
+            logging=ecs.LogDrivers.firelens(
+                options={
+                    "Name": "newrelic",
+                    "endpoint": "https://log-api.newrelic.com/log/v1",
+                    "log_type": "application"
+                },
+                secret_options={
+                    "apiKey": ecs.Secret.from_secrets_manager(self.newrelic_secret, field=json_key)
+                }
             ),
             environment={
                 "ENVIRONMENT": self.environment_name,
