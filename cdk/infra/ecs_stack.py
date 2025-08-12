@@ -181,7 +181,7 @@ class EcsStack(Stack):
 
         firelens_container = task_definition.add_firelens_log_router(
             "log_router",
-            image=ecs.ContainerImage.from_registry("newrelic/logging-firelens-fluentbit:2.4.0"),
+            image=ecs.ContainerImage.from_registry("533243300146.dkr.ecr.ap-northeast-1.amazonaws.com/newrelic/logging-firelens-fluentbit"),
             firelens_config=ecs.FirelensConfig(
                 type=ecs.FirelensLogRouterType.FLUENTBIT,
                 options=ecs.FirelensOptions(enable_ecs_log_metadata=True)
