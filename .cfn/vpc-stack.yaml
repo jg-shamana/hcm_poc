@@ -1,0 +1,486 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "VPC stack with private subnets and VPC endpoints for HCM POC - CFN version"
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+    Default: dev
+    Description: Environment name
+
+  ProjectName:
+    Type: String
+    Default: cfn-hcm-poc
+    Description: Project name
+
+Mappings:
+  EnvironmentMap:
+    dev:
+      VpcCidr: "10.0.0.0/16"
+      PublicSubnet1Cidr: "10.0.100.0/24"
+      PublicSubnet2Cidr: "10.0.101.0/24"
+      PrivateSubnet1Cidr: "10.0.0.0/24"
+      PrivateSubnet2Cidr: "10.0.1.0/24"
+    prod:
+      VpcCidr: "10.1.0.0/16"
+      PublicSubnet1Cidr: "10.1.100.0/24"
+      PublicSubnet2Cidr: "10.1.101.0/24"
+      PrivateSubnet1Cidr: "10.1.0.0/24"
+      PrivateSubnet2Cidr: "10.1.1.0/24"
+
+Resources:
+  # VPC
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-igw-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Attach Internet Gateway to VPC
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-rt-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Public Route to Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Public Subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock:
+        !FindInMap [EnvironmentMap, !Ref Environment, PublicSubnet1Cidr]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-subnet-${Environment}-1"
+        - Key: Type
+          Value: Public
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Associate Public Subnet 1 with Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # Public Subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock:
+        !FindInMap [EnvironmentMap, !Ref Environment, PublicSubnet2Cidr]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-subnet-${Environment}-2"
+        - Key: Type
+          Value: Public
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Associate Public Subnet 2 with Public Route Table
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Elastic IP for NAT Gateway 1
+  NatGateway1Eip:
+    Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-nat-eip-1-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Elastic IP for NAT Gateway 2
+  NatGateway2Eip:
+    Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-nat-eip-2-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # NAT Gateway 1
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1Eip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-nat-gateway-1-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # NAT Gateway 2
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2Eip.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-nat-gateway-2-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Private Route Table 1
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-rt-1-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Private Route 1 to NAT Gateway 1
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  # Private Route Table 2
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-rt-2-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Private Route 2 to NAT Gateway 2
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  # Private Subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock:
+        !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet1Cidr]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-subnet-${Environment}-1"
+        - Key: Type
+          Value: Private
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Associate Private Subnet 1 with Private Route Table 1
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  # Private Subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock:
+        !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet2Cidr]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-private-subnet-${Environment}-2"
+        - Key: Type
+          Value: Private
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Associate Private Subnet 2 with Private Route Table 2
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # Security Group for VPC Endpoints
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for VPC endpoints"
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
+          Description: "Allow HTTPS from VPC"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc-endpoint-sg-${Environment}"
+        - Key: Project
+          Value: HCM-POC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # S3 Gateway Endpoint
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+
+  # ECR Docker Interface Endpoint
+  EcrDkrEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # ECR API Interface Endpoint
+  EcrApiEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+  # CloudWatch Logs Interface Endpoint
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
+Outputs:
+  VpcId:
+    Description: "VPC ID for environment"
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-vpc-id"
+
+  VpcCidr:
+    Description: "VPC CIDR for environment"
+    Value: !FindInMap [EnvironmentMap, !Ref Environment, VpcCidr]
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-vpc-cidr"
+
+  InternetGatewayId:
+    Description: "Internet Gateway ID for environment"
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-igw-id"
+
+  PublicRouteTableId:
+    Description: "Public Route Table ID for environment"
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-public-route-table-id"
+
+  PublicSubnet1Id:
+    Description: "Public Subnet 1 ID for environment"
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-public-subnet-1-id"
+
+  PublicSubnet2Id:
+    Description: "Public Subnet 2 ID for environment"
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-public-subnet-2-id"
+
+  NatGateway1Id:
+    Description: "NAT Gateway 1 ID for environment"
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-nat-gateway-1-id"
+
+  NatGateway2Id:
+    Description: "NAT Gateway 2 ID for environment"
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-nat-gateway-2-id"
+
+  PrivateRouteTable1Id:
+    Description: "Private Route Table 1 ID for environment"
+    Value: !Ref PrivateRouteTable1
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-route-table-1-id"
+
+  PrivateRouteTable2Id:
+    Description: "Private Route Table 2 ID for environment"
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-route-table-2-id"
+
+  PrivateSubnet1Id:
+    Description: "Private Subnet 1 ID for environment"
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-1-id"
+
+  PrivateSubnet1Cidr:
+    Description: "Private Subnet 1 CIDR for environment"
+    Value: !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet1Cidr]
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-1-cidr"
+
+  PrivateSubnet1Az:
+    Description: "Private Subnet 1 AZ for environment"
+    Value: !GetAtt PrivateSubnet1.AvailabilityZone
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-1-az"
+
+  PrivateSubnet2Id:
+    Description: "Private Subnet 2 ID for environment"
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-2-id"
+
+  PrivateSubnet2Cidr:
+    Description: "Private Subnet 2 CIDR for environment"
+    Value: !FindInMap [EnvironmentMap, !Ref Environment, PrivateSubnet2Cidr]
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-2-cidr"
+
+  PrivateSubnet2Az:
+    Description: "Private Subnet 2 AZ for environment"
+    Value: !GetAtt PrivateSubnet2.AvailabilityZone
+    Export:
+      Name: !Sub "cfn-hcm-vpc-${Environment}-private-subnet-2-az"

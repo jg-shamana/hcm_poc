@@ -117,9 +117,23 @@ Resources:
         !FindInMap [EnvironmentMap, !Ref Environment, LogRetentionDays]
     DeletionPolicy: !If [IsDevEnvironment, Delete, Retain]
 
+  # CloudWatch Log Group for FireLens
+  FirelensLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}-firelens-${Environment}"
+      RetentionInDays:
+        !FindInMap [EnvironmentMap, !Ref Environment, LogRetentionDays]
+    DeletionPolicy: !If [IsDevEnvironment, Delete, Retain]
+
   # ECS Task Definition
   EcsTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - EcsExecutionRole
+      - EcsTaskRole
+      - EcsLogGroup
+      - FirelensLogGroup
     Properties:
       Family: !Sub "${ProjectName}-task-${Environment}"
       NetworkMode: awsvpc
@@ -130,20 +144,44 @@ Resources:
       ExecutionRoleArn: !GetAtt EcsExecutionRole.Arn
       TaskRoleArn: !GetAtt EcsTaskRole.Arn
       ContainerDefinitions:
+        # FireLens Log Router Container
+        - Name: log_router
+          Image: 533243300146.dkr.ecr.ap-northeast-1.amazonaws.com/newrelic/logging-firelens-fluentbit:2.4.0
+          Cpu: 50
+          MemoryReservation: 50
+          Essential: false
+          FirelensConfiguration:
+            Type: fluentbit
+            Options:
+              enable-ecs-log-metadata: "true"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref FirelensLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: firelens
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+        # Application Container
         - Name: AppContainer
           Image: !Sub
             - "${RepositoryUri}:latest"
             - RepositoryUri: !ImportValue
                 Fn::Sub: "cfn-hcm-ecr-${Environment}-repository-uri"
-          Cpu: !FindInMap [EnvironmentMap, !Ref Environment, Cpu]
-          Memory: !FindInMap [EnvironmentMap, !Ref Environment, Memory]
           Essential: true
           LogConfiguration:
-            LogDriver: awslogs
+            LogDriver: awsfirelens
             Options:
-              awslogs-group: !Ref EcsLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: ecs
+              Name: newrelic
+              region: !Ref AWS::Region
+              log_group_name: !Ref EcsLogGroup
+              log_stream_prefix: app
+              auto_create_group: "false"
+              log_type: application
+              endpoint: https://log-api.newrelic.com/log/v1
+              apiKey: "${NEW_RELIC_API_KEY}" 
+              enable-ecs-log-metadata: "true"
           Environment:
             - Name: ENVIRONMENT
               Value: !Ref Environment
@@ -151,6 +189,9 @@ Resources:
               Value: !Ref ProjectName
             - Name: PYTHONUNBUFFERED
               Value: "1"
+          Secrets:
+            - Name: NEW_RELIC_API_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:hcm_poc:hcm-poc-dev-newrelic-api-key::"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-task-${Environment}"
@@ -164,6 +205,10 @@ Resources:
   # ECS Service
   EcsService:
     Type: AWS::ECS::Service
+    DependsOn:
+      - EcsCluster
+      - EcsTaskDefinition
+      - EcsSecurityGroup
     Properties:
       ServiceName: !Sub "${ProjectName}-service-${Environment}"
       Cluster: !Ref EcsCluster
@@ -234,3 +279,9 @@ Outputs:
     Value: !Ref EcsLogGroup
     Export:
       Name: !Sub "cfn-hcm-ecs-${Environment}-log-group-name"
+
+  FirelensLogGroupName:
+    Description: "FireLens CloudWatch Log Group name for environment"
+    Value: !Ref FirelensLogGroup
+    Export:
+      Name: !Sub "cfn-hcm-ecs-${Environment}-firelens-log-group-name"
