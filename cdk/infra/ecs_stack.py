@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ec2 as ec2,
     aws_ecr as ecr,
+    aws_servicediscovery as sd,
     aws_iam as iam,
     aws_logs as logs,
     aws_secretsmanager as secretsmanager,
@@ -97,8 +98,20 @@ class EcsStack(Stack):
             container_insights_v2=ecs.ContainerInsights.ENABLED
         )
 
-        for key, value in self.config["tags"].items():
-            Tags.of(cluster).add(key, value)
+        cm = self.config.get("cloudmap", {})
+        ns_id_export = cm.get("namespace_id_export_name")
+        ns_arn_export = cm.get("namespace_arn_export_name")
+        ns_name = cm.get("namespace_name")
+        if ns_id_export and ns_arn_export and ns_name:
+            namespace_id = cdk.Fn.import_value(ns_id_export)
+            namespace_arn = cdk.Fn.import_value(ns_arn_export)
+            self.cloud_map_namespace = sd.PrivateDnsNamespace.from_private_dns_namespace_attributes(
+                self,
+                "ImportedCloudMapNamespace",
+                namespace_id=namespace_id,
+                namespace_arn=namespace_arn,
+                namespace_name=ns_name
+            )
 
         return cluster
 
@@ -252,7 +265,13 @@ class EcsStack(Stack):
             security_groups=[self.security_group],
             assign_public_ip=False,
             platform_version=ecs.FargatePlatformVersion.LATEST,
-            enable_execute_command=True
+            enable_execute_command=True,
+            cloud_map_options=ecs.CloudMapOptions(
+                name="app",
+                dns_record_type=sd.DnsRecordType.A,
+                dns_ttl=cdk.Duration.seconds(30),
+                cloud_map_namespace=getattr(self, "cloud_map_namespace", None)
+            )
         )
         
         for key, value in self.config["tags"].items():

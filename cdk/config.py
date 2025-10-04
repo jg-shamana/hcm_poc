@@ -22,6 +22,11 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 "public_subnet_cidr_mask": 24,
                 "private_subnet_cidr_mask": 24
             },
+            "cloudmap": {
+                "namespace_name": "dev.hcm.internal",
+                "namespace_id_export_name": "cloudmap-namespace-id-dev",
+                "namespace_arn_export_name": "cloudmap-namespace-arn-dev"
+            },
             "ecr": {
                 "repository_name": "cdk-hcm-poc-dev",
                 "image_tag_mutability": "MUTABLE",
@@ -44,6 +49,11 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 "cidr_block": "10.1.0.0/16",
                 "public_subnet_cidr_mask": 24,
                 "private_subnet_cidr_mask": 24
+            },
+            "cloudmap": {
+                "namespace_name": "prod.hcm.internal",
+                "namespace_id_export_name": "cloudmap-namespace-id-prod",
+                "namespace_arn_export_name": "cloudmap-namespace-arn-prod"
             },
             "ecr": {
                 "repository_name": "cdk-hcm-poc-prod",

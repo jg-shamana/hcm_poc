@@ -4,6 +4,7 @@ import aws_cdk as cdk
 from aws_cdk import (
     Stack,
     aws_ec2 as ec2,
+    aws_route53 as route53,
     CfnOutput,
     Tags
 )
@@ -25,6 +26,7 @@ class VpcStack(Stack):
         
         self.vpc = self._create_vpc()
         self._create_vpc_endpoints()
+        self._create_private_hosted_zone()
         self._create_outputs()
 
     def _create_vpc(self) -> ec2.Vpc:
@@ -129,6 +131,22 @@ class VpcStack(Stack):
             for key, value in self.config["tags"].items():
                 Tags.of(endpoint).add(key, value)
 
+    def _create_private_hosted_zone(self) -> None:
+        r53_config = self.config.get("route53", {})
+        zone_name = r53_config.get("private_zone_name")
+        if not zone_name:
+            return
+
+        self.private_hosted_zone = route53.PrivateHostedZone(
+            self,
+            "PrivateHostedZone",
+            zone_name=zone_name,
+            vpc=self.vpc
+        )
+        for key, value in self.config["tags"].items():
+            Tags.of(self.private_hosted_zone).add(key, value)
+        Tags.of(self.private_hosted_zone).add("Name", f"{self.config['project_name']}-phz-{self.environment_name}")
+
     def _create_outputs(self) -> None:
         CfnOutput(
             self,
@@ -165,6 +183,15 @@ class VpcStack(Stack):
                 value=subnet.ipv4_cidr_block,
                 description=f"Private Subnet {subnet_number} CIDR for {self.environment_name} environment",
                 export_name=f"cdk-hcm-vpc-{self.environment_name}-private-subnet-{subnet_number}-cidr"
+            )
+
+        if getattr(self, "private_hosted_zone", None):
+            CfnOutput(
+                self,
+                "PrivateHostedZoneId",
+                value=self.private_hosted_zone.hosted_zone_id,
+                description=f"Private Hosted Zone ID for {self.environment_name} environment",
+                export_name=f"cdk-hcm-vpc-{self.environment_name}-private-hosted-zone-id"
             )
             
             CfnOutput(
