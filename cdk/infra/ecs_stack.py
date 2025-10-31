@@ -95,7 +95,7 @@ class EcsStack(Stack):
             "EcsCluster",
             vpc=self.vpc,
             cluster_name=f"{self.config['project_name']}-cluster-{self.environment_name}",
-            container_insights_v2=ecs.ContainerInsights.ENABLED
+            container_insights=True
         )
 
         cm = self.config.get("cloudmap", {})

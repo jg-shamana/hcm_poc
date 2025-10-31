@@ -23,7 +23,7 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
                 "private_subnet_cidr_mask": 24
             },
             "cloudmap": {
-                "namespace_name": "dev.hcm.internal",
+                "namespace_name": "dev.hcm.sample.co.jp",
                 "namespace_id_export_name": "cloudmap-namespace-id-dev",
                 "namespace_arn_export_name": "cloudmap-namespace-arn-dev"
             },
