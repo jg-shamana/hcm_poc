@@ -13,8 +13,8 @@ on:
         description: "AWS Region"
         type: choice
         required: true
-        options: [ap-northeast-1]
-        default: ap-northeast-1
+        options: [ap-south-1]
+        default: ap-south-1
       image_tag:
         description: "Image tag (default: git SHA)"
         type: string
@@ -43,8 +43,10 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: arn:aws:iam::726854609615:role/hamana_github_actions_for_oidc
           aws-region: ${{ inputs.region }}
+
+      - run: aws sts get-caller-identity
 
       - name: Get AWS Account ID
         id: acct
